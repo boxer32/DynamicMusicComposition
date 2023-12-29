@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multi-Stem WAV Player</title>
+  <script>
+    window.onload = function() {
+      const NUM_STEMS_PER_FOLDER = 10; // Define the number of stems per folder
+
+      let audioContext;
+      let userStemChoices = {};
+
+      // Function to initialize the audio context
+      function initAudioContext() {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+
+      // Function to get the user's IP address using ipify API
+      function getIpAddress() {
+        // Using a free API to get the IP address information
+        return fetch('https://api.ipify.org?format=json')
+          .then(response => response.json())
+          .then(data => data.ip)
+          .catch(error => {
+            console.error('Error fetching IP address:', error);
+            // Fallback to a default IP address for demonstration purposes
+            return '111.111.111.111';
+          });
+      }
+
+      function getUserStemChoice(userIpAddress) {
+        // Extract the digits from the IP address (start from the end and skip dots)
+        const digits = userIpAddress
+          .split('')
+          .reverse()
+          .filter((char) => char !== '.')
+          .map(Number);
+
+        const drumIndex = digits[0] % NUM_STEMS_PER_FOLDER;
+        const bassIndex = digits[1] % NUM_STEMS_PER_FOLDER;
+        const chordIndex = digits[2] % NUM_STEMS_PER_FOLDER;
+        const melodyIndex = digits[3] % NUM_STEMS_PER_FOLDER;
+        const fxIndex = digits[4] % NUM_STEMS_PER_FOLDER;
+
+        return {
+          drum: drumIndex,
+          bass: bassIndex,
+          chord: chordIndex,
+          melody: melodyIndex,
+          fx: fxIndex,
+        };
+      }
+
+      const stemNames = ['drum', 'bass', 'chord', 'melody', 'fx'];
+      const bufferLoader = new BufferLoader(stemNames, finishedLoading);
+
+      // Load audio files only after the audio context is created
+      document.getElementById('initAudioButton').addEventListener('click', async function() {
+        initAudioContext();
+        const ipAddress = await getIpAddress();
+        userStemChoices = getUserStemChoice(ipAddress);
+        console.log('User IP Address:', ipAddress);
+        console.log('User Stem Choices:', userStemChoices);
+        bufferLoader.load();
+      });
+
+      const gainNodes = [];
+      const sources = [];
+
+      function finishedLoading(bufferList) {
+        for (let i = 0; i < stemNames.length; i++) {
+          gainNodes[i] = audioContext.createGain();
+          gainNodes[i].connect(audioContext.destination);
+
+          sources[i] = audioContext.createBufferSource();
+          sources[i].buffer = bufferList[i];
+          sources[i].connect(gainNodes[i]);
+        }
+
+        document.getElementById('playButton').addEventListener('click', function() {
+          for (let i = 0; i < stemNames.length; i++) {
+            sources[i] = audioContext.createBufferSource();
+            sources[i].buffer = bufferList[i];
+            sources[i].connect(gainNodes[i]);
+            sources[i].start(0);
+          }
+        });
+
+        document.getElementById('pauseButton').addEventListener('click', function() {
+          for (let i = 0; i < stemNames.length; i++) {
+            sources[i].stop();
+          }
+        });
+
+        document.getElementById('stopButton').addEventListener('click', function() {
+          for (let i = 0; i < stemNames.length; i++) {
+            sources[i].stop();
+            sources[i] = audioContext.createBufferSource();
+            sources[i].buffer = bufferList[i];
+            sources[i].connect(gainNodes[i]);
+          }
+        });
+      }
+
+      function BufferLoader(stemNames, callback) {
+        this.stemNames = stemNames;
+        this.onload = callback;
+        this.bufferList = new Array(stemNames.length);
+        this.loadCount = 0;
+      }
+
+      BufferLoader.prototype.loadBuffer = function(stemName, index) {
+        const url = stemName + '/1.wav';
+        const request = new XMLHttpRequest();
+        request.open('GET', url, true);
+        request.responseType = 'arraybuffer';
+
+        const loader = this;
+
+        request.onload = function() {
+          audioContext.decodeAudioData(
+            request.response,
+            function(buffer) {
+              if (!buffer) {
+                console.error('Error decoding file data: ' + url);
+                return;
+              }
+              loader.bufferList[index] = buffer;
+              if (++loader.loadCount === loader.stemNames.length) {
+                loader.onload(loader.bufferList);
+              }
+            },
+            function(error) {
+              console.error('decodeAudioData error', error);
+            }
+          );
+        };
+
+        request.onerror = function() {
+          console.error('BufferLoader: XHR error');
+        };
+
+        request.send();
+      };
+
+      BufferLoader.prototype.load = function() {
+        for (let i = 0; i < this.stemNames.length; ++i) {
+          this.loadBuffer(this.stemNames[i], i);
+        }
+      };
+    };
+  </script>
+</head>
+<body>
+  <h1>Multi-Stem WAV Player</h1>
+
+  <!-- Button to initialize the audio context -->
+  <button id="initAudioButton">Initialize Audio</button>
+
+  <!-- Buttons for controlling playback -->
+  <button id="playButton">Play</button>
+  <button id="pauseButton">Pause</button>
+  <button id="stopButton">Stop</button>
+</body>
+</html>
