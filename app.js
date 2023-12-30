@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Set the background image based on day or night
     if (isDayTime) {
-        coverElement.style.backgroundImage = 'url(cover2.png)';
+        coverElement.style.backgroundImage = 'url(cover1.png)';
     } else {
         coverElement.style.backgroundImage = 'url(cover2.png)';
     }
