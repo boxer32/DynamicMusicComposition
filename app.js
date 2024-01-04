@@ -1,151 +1,145 @@
 document.addEventListener('DOMContentLoaded', function () {
-    // Get the current hour
-    const currentHour = new Date().getHours();
+  const NUM_STEMS_PER_FOLDER = 10;
 
-    // Get the cover element
-    const coverElement = document.querySelector('.disco--cover');
+  let audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
-    // Determine day or night based on the current hour
-    const isDayTime = currentHour >= 6 && currentHour < 18;
 
-    // Set the background image based on day or night
-    if (isDayTime) {
-        coverElement.style.backgroundImage = 'url(cover1.png)';
-    } else {
-        coverElement.style.backgroundImage = 'url(cover2.png)';
+  let userStemChoices = {};
+  let audioSources = [];
+  let isAudioPlaying = false;
+
+  function initAudioContext() {
+      if (audioContext.state === 'closed') {
+          audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      }
+  }
+
+  async function getIpAddress() {
+    try {
+        // Add a timestamp to the request to avoid caching
+        const timestamp = new Date().getTime();
+        const response = await fetch(`https://api.ipify.org?format=json&t=${timestamp}`);
+        const data = await response.json();
+        //return data.ip;
+        return '171.76.64.21'; // Fallback IP
+    } catch (error) {
+        console.error('Error fetching IP address:', error);
+        return '111.111.111.111'; // Fallback IP
     }
+}
 
-    const NUM_STEMS_PER_FOLDER = 10; // Define the number of stems per folder
-  
-    let audioContext;
-    let userStemChoices = {};
-    let isAudioInitialized = false;
-    let isAudioPlaying = false;
-  
-    // Function to initialize the audio context
-    function initAudioContext() {
-      audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    }
-  
-    // Function to get the user's IP address using ipify API
-    function getIpAddress() {
-      // Using a free API to get the IP address information
-      return fetch('https://api.ipify.org?format=json')
-        .then(response => response.json())
-        .then(data => data.ip)
-        .catch(error => {
-          console.error('Error fetching IP address:', error);
-          // Fallback to a default IP address for demonstration purposes
-          return '111.111.111.111';
-        });
-    }
-  
-    function getUserStemChoice(userIpAddress) {
-      // Extract the digits from the IP address (start from the end and skip dots)
-      const digits = userIpAddress
-        .split('')
-        .reverse()
-        .filter((char) => char !== '.')
-        .map(Number);
-  
+  function getUserStemChoice(userIpAddress) {
+      const digits = userIpAddress.split('').reverse().filter((char) => char !== '.').map(Number);
       const drumIndex = digits[0] % NUM_STEMS_PER_FOLDER;
       const bassIndex = digits[1] % NUM_STEMS_PER_FOLDER;
       const chordIndex = digits[2] % NUM_STEMS_PER_FOLDER;
       const melodyIndex = digits[3] % NUM_STEMS_PER_FOLDER;
       const fxIndex = digits[4] % NUM_STEMS_PER_FOLDER;
-  
+      const percIndex = digits[5] % NUM_STEMS_PER_FOLDER;
+
       return {
-        drum: drumIndex,
-        bass: bassIndex,
-        chord: chordIndex,
-        melody: melodyIndex,
-        fx: fxIndex,
+          drum: drumIndex,
+          bass: bassIndex,
+          chord: chordIndex,
+          melody: melodyIndex,
+          fx: fxIndex,
+          perc: percIndex
       };
-    }
-  
-    const stemNames = ['drum', 'bass', 'chord', 'melody', 'fx'];
-    const bufferLoader = new BufferLoader(stemNames, finishedLoading);
-  
-    // Click event to control audio
-    document.addEventListener('click', function () {
-      if (!isAudioInitialized) {
-        initAudioContext();
-        getIpAddress().then(ipAddress => {
-          userStemChoices = getUserStemChoice(ipAddress);
-          console.log('User IP Address:', ipAddress);
-          console.log('User Stem Choices:', userStemChoices);
-          bufferLoader.load();
-        });
-        isAudioInitialized = true;
-      } else {
-        if (!isAudioPlaying) {
-          // Start playing
-          for (let i = 0; i < stemNames.length; i++) {
-            const source = audioContext.createBufferSource();
-            source.buffer = bufferLoader.bufferList[i];
-            source.connect(audioContext.destination);
-            source.start(0);
-          }
-          isAudioPlaying = true;
-        } else {
-          // Stop playing
-          audioContext.close();
-          isAudioInitialized = false;
-          isAudioPlaying = false;
+  }
+
+  async function loadAndPlayStems() {
+      const ipAddress = await getIpAddress();
+      userStemChoices = getUserStemChoice(ipAddress);
+      console.log('User IP Address:', ipAddress);
+      console.log('User Stem Choices:', userStemChoices);
+
+      stopAudio();
+      bufferLoader.load();
+  }
+
+  function stopAudio() {
+    audioSources.forEach(source => {
+        // Check if the source is playing before trying to stop it
+        if (source.buffer && source.playbackState === source.PLAYING_STATE) {
+            source.stop();
         }
-      }
     });
-  
-    function finishedLoading(bufferList) {
-      // Rest of the code for handling the loaded buffers
-      // ...
-    }
-  
-    function BufferLoader(stemNames, callback) {
+    audioSources = [];
+    isAudioPlaying = false;
+}
+
+  document.addEventListener('click', async function () {
+      initAudioContext();
+
+      if (!isAudioPlaying) {
+          await loadAndPlayStems();
+          isAudioPlaying = true;
+      } else {
+          stopAudio();
+      }
+  });
+
+  function finishedLoading(bufferList) {
+    // Stop any currently playing audio first
+    stopAudio();
+
+    // Now load and play the new buffers
+    bufferList.forEach((buffer, index) => {
+        const source = audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioContext.destination);
+        source.start(0); // Start the source immediately
+        audioSources.push(source);
+    });
+
+    isAudioPlaying = true;
+}
+
+  function BufferLoader(stemNames, callback) {
       this.stemNames = stemNames;
       this.onload = callback;
       this.bufferList = new Array(stemNames.length);
       this.loadCount = 0;
-    }
-  
-    BufferLoader.prototype.loadBuffer = function (stemName, index) {
-      const url = stemName + '/1.wav';
+  }
+
+  BufferLoader.prototype.loadBuffer = function (stemName, index) {
+      const url = `${stemName}/${userStemChoices[stemName]}.wav`;
+      console.log(`Loading audio file: ${url}`);
+
       const request = new XMLHttpRequest();
       request.open('GET', url, true);
       request.responseType = 'arraybuffer';
-  
+
       const loader = this;
-  
+
       request.onload = function () {
-        audioContext.decodeAudioData(
-          request.response,
-          function (buffer) {
-            if (!buffer) {
-              console.error('Error decoding file data: ' + url);
-              return;
-            }
-            loader.bufferList[index] = buffer;
-            if (++loader.loadCount === loader.stemNames.length) {
-              loader.onload(loader.bufferList);
-            }
-          },
-          function (error) {
-            console.error('decodeAudioData error', error);
-          }
-        );
+          audioContext.decodeAudioData(request.response, function (buffer) {
+              if (!buffer) {
+                  console.error('Error decoding file data: ' + url);
+                  return;
+              }
+              loader.bufferList[index] = buffer;
+              if (++loader.loadCount === loader.stemNames.length) {
+                  loader.onload(loader.bufferList);
+              }
+          }, function (error) {
+              console.error('decodeAudioData error', error);
+          });
       };
-  
+
       request.onerror = function () {
-        console.error('BufferLoader: XHR error');
+          console.error('BufferLoader: XHR error');
       };
-  
+
       request.send();
-    };
-  
-    BufferLoader.prototype.load = function () {
+  };
+
+  BufferLoader.prototype.load = function () {
       for (let i = 0; i < this.stemNames.length; ++i) {
-        this.loadBuffer(this.stemNames[i], i);
+          this.loadBuffer(this.stemNames[i], i);
       }
-    };
-  });
-  
+  };
+
+  const stemNames = ['drum', 'bass', 'chord', 'melody', 'fx', 'perc'];
+  const bufferLoader = new BufferLoader(stemNames, finishedLoading);
+});
