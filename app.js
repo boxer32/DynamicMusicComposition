@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function () {
   let userStemChoices = {};
   let audioSources = [];
   let isAudioPlaying = false;
+  
 
   function initAudioContext() {
       if (audioContext.state === 'closed') {
@@ -20,8 +21,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const timestamp = new Date().getTime();
         const response = await fetch(`https://api.ipify.org?format=json&t=${timestamp}`);
         const data = await response.json();
-        //return data.ip;
-        return '171.76.64.21'; // Fallback IP
+        return data.ip;
+        //return '171.28.62.85'; // Fallback IP
     } catch (error) {
         console.error('Error fetching IP address:', error);
         return '111.111.111.111'; // Fallback IP
@@ -36,6 +37,8 @@ document.addEventListener('DOMContentLoaded', function () {
       const melodyIndex = digits[3] % NUM_STEMS_PER_FOLDER;
       const fxIndex = digits[4] % NUM_STEMS_PER_FOLDER;
       const percIndex = digits[5] % NUM_STEMS_PER_FOLDER;
+      const tranIndex = digits[6] % NUM_STEMS_PER_FOLDER;
+      const vinlIndex = digits[7] % NUM_STEMS_PER_FOLDER;
 
       return {
           drum: drumIndex,
@@ -43,7 +46,9 @@ document.addEventListener('DOMContentLoaded', function () {
           chord: chordIndex,
           melody: melodyIndex,
           fx: fxIndex,
-          perc: percIndex
+          perc: percIndex,
+          tran: tranIndex,
+          vinl: vinlIndex,
       };
   }
 
@@ -140,6 +145,6 @@ document.addEventListener('DOMContentLoaded', function () {
       }
   };
 
-  const stemNames = ['drum', 'bass', 'chord', 'melody', 'fx', 'perc'];
+  const stemNames = ['drum', 'bass', 'chord', 'melody', 'fx', 'perc','tran','vinl'];
   const bufferLoader = new BufferLoader(stemNames, finishedLoading);
 });
